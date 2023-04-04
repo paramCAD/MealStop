@@ -1,0 +1,60 @@
+# This file is a template, and might need editing before it works on your project.
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
+
+# This is a sample GitLab CI/CD configuration file that should run without any modifications.
+# It demonstrates a basic 3 stage CI/CD pipeline. Instead of real tests or scripts,
+# it uses echo commands to simulate the pipeline execution.
+#
+# A pipeline is composed of independent jobs that run scripts, grouped into stages.
+# Stages run in sequential order, but jobs within stages run in parallel.
+#
+# For more information, see: https://docs.gitlab.com/ee/ci/yaml/index.html#stages
+
+stages:          # List of stages for jobs, and their order of execution
+  - build
+  - test
+  - quality-checks
+  - deploy
+
+maven-build:    # Build stage to build the project along with all the dependencies
+  image: maven:3-jdk-11
+  stage: build
+  script: "mvn package -B"
+
+maven-test:     # Test stage to run all the Junit tests available in the project
+  image: maven:3-jdk-11
+  stage: test
+  script: "mvn test -B"
+
+quality-checks:   # Quality stage to run designite and get all the quality metrics and upload to qscored
+  stage: quality-checks
+  image: maven:3-jdk-11
+  variables:
+    UPLOAD_QUALITY_REPORT: 'curl -X PUT -H "Authorization: Token $QSCORED_API_KEY" + -H "username:sharad99kr@gmail.com" -H "Content-Type:   application/xml" --url "https://qscored.com/api/upload/file.xml?is_open_access=off&version=$CI_PIPELINE_IID&project_name=bethedonor_project" -F "file=@DesigniteAnalysis.xml"'
+  before_script:
+    - apt-get update
+    - apt-get install -y wget curl
+    - wget -O DesigniteJava.jar https://www.dropbox.com/s/mwizkj8uhplz4x3/DesigniteJava.jar?dl=1
+  script:
+    - java -jar DesigniteJava.jar -i ./ -o code-quality/ -f XML
+    - ls -l
+    - ls code-quality
+    - cd code-quality
+    - eval "$UPLOAD_QUALITY_REPORT"
+    - echo "$UPLOAD_QUALITY_REPORT"
+  only:
+    - main
+
+deploy:       # Deploy stage to deploy the built project to heroku
+  stage: deploy
+  image: ruby:latest
+  script:
+    - apt-get update -qy
+    - apt-get install -y ruby-dev
+    - gem install dpl
+    - dpl --provider=heroku --app=mealstop-application --api-key=$HEROKU_API_KEY
+  only:
+    - main
